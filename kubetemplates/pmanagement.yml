@@ -123,7 +123,7 @@ spec:
               memory: 10Mi
               cpu: 5m
 ---
-apiVersion: batch/v1beta1
+apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: tallyedits
