@@ -6,3 +6,4 @@ environments/
 .DS_Store
 .vscode
 env_config.sh
+.idea/
