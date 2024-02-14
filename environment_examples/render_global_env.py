@@ -12,31 +12,32 @@ def create_spaced_list_of_strings(l):
 
 
 var_dict = {
-    "environment_name": "global",
-    "project_name": "mygoogleproject",
-    "depl_region": "us-east1",
-    "depl_zone": "us-east1-b",
-    "dns_zone": "myclouddnszone",
-    "domain_name": "mydns.com",
-    "letsencrypt_email": "myemail@email.com",
+    "environment_name": "global-2023d",
+    "project_name": "heinze-lab-daf-global",
+    "depl_region": "europe-west3",
+    "depl_zone": "europe-west3-b",
+    "dns_zone": "connectomics-braininbrain-org",
+    "domain_name": "connectomics.braininbrain.org",
+    "letsencrypt_email": "kevin@tedore.com",
     "docker_repository": "docker.io/caveconnectome",
     "add_dns_hostnames": [
-        "${ENVIRONMENT}.myextradns.com",
+        "global.connectomics.braininbrain.org",
     ],
     "add_dns_zones": [
-        "myextraclouddns-zone",
+        "connectomics-braininbrain-org"
     ],
-    "postgres_password": "mysecretpassword",
+    "postgres_password": "adBIihbvcQ29DSfedjq",
     "sql_instance_name": "cave-global",
-    "add_storage_secrets": ["optionalpathtosecret.json"],
-    "global_server": "global.mydns.com",
-    "infoservice_csrf_key": "kibhfugtyknjbjkop",
-    "infoservice_secret_key": "lnjk;buigjkloihjhj",
-    "authservice_secret_key": "ohijlkhogiulkjnjop",
+    "add_storage_secrets": [],
+    "global_server": "global.connectomics.braininbrain.org",
+    "infoservice_csrf_key": "U7Kcu6Fr7nxeFc6PTJ",
+    "infoservice_secret_key": "JRSuzTiN3qxnVaEx1i",
+    "authservice_secret_key": "JRSuzTiN3q#nVaEA1i",
     "ngl_link_db_table_name": "neuroglancerjsondb",
     "default_admins": [
-        ["admin1@email.com", "Admin1First Admin1Last", "Admin1PI"],
-        ["admin2@email.com", "Admin2First Admin2Last", "Admin2PI"],
+        ["kevin@tedore.com", "Kevin Tedore", "Admin1Tech"],
+        ["stanley.heinze@gmx.de", "Stanley Heinze", "Admin2PI"],
+        ["lund.neuroscience@gmail.com", "Kevin Tedore", "Admin2Tech"],
     ],
 }
 
