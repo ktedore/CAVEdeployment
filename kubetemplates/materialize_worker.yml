@@ -510,10 +510,11 @@ spec:
         cloud.google.com/gke-nodepool: ${STANDARD_POOL}
       containers:
         - name: flower
-          image: mher/flower:0.9.5
+          image: mher/flower:2.0.1
           args:
-            - flower
+            - celery
             - --broker=redis://${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+            - flower
             - --port=5555
             - --purge_offline_workers=1
           env:
