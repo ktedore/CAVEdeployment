@@ -111,17 +111,18 @@ export ADD_STORAGE_SECRET_FOLDER=${ROOT_FOLDER}/secrets/${ENVIRONMENT}
 
 # SERVICE VERSIONS
 
-export ANNOTATION_ENGINE_VERSION=3.6.6
+export ANNOTATION_ENGINE_VERSION=4.14.1
 export ANNOTATION_UI_VERSION=0.2.1
-export MATERIALIZE_VERSION=3.0.7
-export PYCG_VERSION=2.3.1
-export PCGL2CACHE_VERSION=1.1.1
+export MATERIALIZE_VERSION=4.23.0
+export PYCG_VERSION=2.15.1
+export PCGL2CACHE_VERSION=1.3.1
 export GUIDEBOOK_VERSION=0.3.2
-export DASH_VERSION=29
+export DASH2_VERSION=1.12.1
+export DASH_VERSION=1.12.1
 export PPROGRESS_VERSION=0.0.47
 export PMANAGEMENT_VERSION=0.15.2
 export PROXY_VERSION=RequestorPays12
-export CAVECANARY_VERSION=0.1.2
+export CAVECANARY_VERSION=0.4.4
 
 # REPLICAS
 ### PCG 
@@ -175,6 +176,11 @@ export MIN_DATABASES=1
 export MAX_DATABASES=2
 export MAT_BEAT_SCHEDULES=$(cat {{ mat_beat_schedule }})
 export MERGE_MATERIALIZE_DATABASES=False
+export LIMITS_QUERY_PER_MINUTE=200
+export LIMITS_FAST_QUERY_PER_MINUTE=2000
+export LIMITER_URI=redis://${PCG_REDIS_IP}/0
+export MAT_LIMITER_CATEGORIES={\"query\":\"${LIMITS_QUERY_PER_MINUTE}/minute\"\,\"fast_query\":\"${LIMITS_FAST_QUERY_PER_MINUTE}/minute\"}
+
 
 # ANNOTATION_ENGINE
 export ANNOTATION_ENGINE_CONFIG_VERSION=1.4
@@ -234,9 +240,10 @@ export DASH_CONFIG_VERSION=6
 
 # DEFINE ADD SECRET IMPORT
 export PYCG_SERVICE_ACCOUNT_ADDON="{{ pcg_service_account_addon }}"
-export REDIS_PASSWORD={{ redis_password }}
-export REDIS_HOST="redis-release-master.default.svc.cluster.local"
-export REDIS_PORT=6379
+export MAT_REDIS_PASSWORD=""
+export MAT_REDIS_NAME={{ project_name }}-celery-redis
+export MAT_REDIS_HOST="$(gcloud redis instances describe $MAT_REDIS_NAME --region=$REGION | sed -n -e 's/^host: \(.*\)$/\1/p')"
+export MAT_REDIS_PORT=6379
 
 
 # CELERY

@@ -1,10 +1,10 @@
-apiVersion: autoscaling/v2beta1
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: celery-producer-scaler
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1beta1
+    apiVersion: apps/v1
     kind: Deployment
     name: celery-producer
   minReplicas: ${CELERY_PRODUCER_MIN_REPLICAS}
@@ -12,16 +12,19 @@ spec:
   metrics:
     - type: Pods
       pods:
-        metricName: custom.googleapis.com|http|celery_queue_length
-        targetAverageValue: 1
+        metric:
+          name: custom.googleapis.com|http|celery_queue_length
+        target:
+          type: AverageValue
+          averageValue: 1
 ---
-apiVersion: autoscaling/v2beta1
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: celery-consumer-scaler
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1beta1
+    apiVersion: apps/v1
     kind: Deployment
     name: celery-consumer
   minReplicas: ${CELERY_CONSUMER_MIN_REPLICAS}
@@ -29,8 +32,11 @@ spec:
   metrics:
     - type: Pods
       pods:
-        metricName: custom.googleapis.com|http|celery_queue_length
-        targetAverageValue: 2
+        metric:
+          name: custom.googleapis.com|http|celery_queue_length
+        target:
+          type: AverageValue
+          averageValue: 2
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -49,10 +55,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${CELERY_WORKER_POOL}"
+          value: "${STANDARD_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${CELERY_WORKER_POOL}
+        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
       volumes:
         - name: materializationengine-config-volume
           configMap:
@@ -72,7 +78,7 @@ spec:
           args:
             - cli.py
             - --broker-url
-            - redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - --port
             - "9540"
             - -q
@@ -134,13 +140,13 @@ spec:
             - name: MATERIALIZATION_ENGINE_SETTINGS
               value: /app/materializationengine/instance/config.cfg
             - name: REDIS_SERVICE_HOST
-              value: ${REDIS_HOST}
+              value: ${MAT_REDIS_HOST}
             - name: REDIS_HOST
-              value: ${REDIS_HOST}
+              value: ${MAT_REDIS_HOST}
             - name: REDIS_PASSWORD
-              value: ${REDIS_PASSWORD}
+              value: ${MAT_REDIS_PASSWORD}
             - name: CELERY_BROKER_URL
-              value: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+              value: redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
@@ -176,7 +182,7 @@ spec:
               exec:
                 command: ["/home/nginx/gracefully_shutdown_celery.sh"]
         - name: cloudsql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.11
+          image: gcr.io/cloudsql-docker/gce-proxy:1.33.6
           command:
             [
               "/cloud_sql_proxy",
@@ -224,10 +230,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${CELERY_WORKER_POOL}"
+          value: "${MESH_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${CELERY_WORKER_POOL}
+        cloud.google.com/gke-nodepool: ${MESH_POOL}
       volumes:
         - name: materializationengine-config-volume
           configMap:
@@ -247,7 +253,7 @@ spec:
           args:
             - cli.py
             - --broker-url
-            - redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - --port
             - "9540"
             - -q
@@ -309,13 +315,13 @@ spec:
             - name: MATERIALIZATION_ENGINE_SETTINGS
               value: /app/materializationengine/instance/config.cfg
             - name: REDIS_SERVICE_HOST
-              value: ${REDIS_HOST}
+              value: ${MAT_REDIS_HOST}
             - name: REDIS_HOST
-              value: ${REDIS_HOST}
+              value: ${MAT_REDIS_HOST}
             - name: REDIS_PASSWORD
-              value: ${REDIS_PASSWORD}
+              value: ${MAT_REDIS_PASSWORD}
             - name: CELERY_BROKER_URL
-              value: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+              value: redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
@@ -351,7 +357,7 @@ spec:
               exec:
                 command: ["/home/nginx/gracefully_shutdown_celery.sh"]
         - name: cloudsql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.11
+          image: gcr.io/cloudsql-docker/gce-proxy:1.33.6
           command:
             [
               "/cloud_sql_proxy",
@@ -401,10 +407,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${CELERY_WORKER_POOL}"
+          value: "${STANDARD_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${CELERY_WORKER_POOL}
+        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
       volumes:
         - name: materializationengine-config-volume
           configMap:
@@ -432,9 +438,9 @@ spec:
             - name: MATERIALIZATION_ENGINE_SETTINGS
               value: /app/materializationengine/instance/config.cfg
             - name: REDIS_SERVICE_HOST
-              value: ${REDIS_HOST}
-            - name: REDIS_PASSWORD
-              value: ${REDIS_PASSWORD}
+              value: ${MAT_REDIS_HOST}
+            - name: MAT_REDIS_PASSWORD
+              value: ${MAT_REDIS_PASSWORD}
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
@@ -450,7 +456,7 @@ spec:
               cpu: 10m
               memory: 150Mi
         - name: cloudsql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.11
+          image: gcr.io/cloudsql-docker/gce-proxy:1.33.6
           command:
             [
               "/cloud_sql_proxy",
@@ -495,12 +501,19 @@ spec:
       labels:
         app: flower
     spec:
+      tolerations:
+        - key: "pool"
+          operator: "Equal"
+          value: "${STANDARD_POOL}"
+          effect: "NoSchedule"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
       containers:
         - name: flower
           image: mher/flower:0.9.5
           args:
             - flower
-            - --broker=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0
+            - --broker=redis://${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - --port=5555
             - --purge_offline_workers=1
           env:
@@ -508,4 +521,8 @@ spec:
               value: "5555"
           ports:
             - containerPort: 5555
+          resources:
+            requests:
+              memory: 150Mi
+              cpu: 10m
       restartPolicy: Always
