@@ -1,32 +1,69 @@
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: remeshworker-scaler
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: remeshworker
-  minReplicas: ${REMESHWORKER_MIN_REPLICAS}
-  maxReplicas: ${REMESHWORKER_MAX_REPLICAS}
-  metrics:
-    - external:
-        metric:
-          name: pubsub.googleapis.com|subscription|num_undelivered_messages
-          selector:
-            matchLabels:
-              resource.labels.subscription_id: ${PYCHUNKEDGRAPH_LOW_PRIORITY_REMESH_QUEUE}
-        target:
-          type: AverageValue
-          averageValue: 1
-      type: External
+# ---
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: remeshworker-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: remeshworker
+#   minReplicas: ${REMESHWORKER_MIN_REPLICAS}
+#   maxReplicas: ${REMESHWORKER_MAX_REPLICAS}
+#   metrics:
+#     - external:
+#         metric:
+#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
+#           selector:
+#             matchLabels:
+#               resource.labels.subscription_id: ${PYCHUNKEDGRAPH_LOW_PRIORITY_REMESH_QUEUE}
+#         target:
+#           type: AverageValue
+#           averageValue: 1
+#       type: External
     # - type: Resource
     #   resource:
     #     name: memory
     #     target:
     #       type: Utilization
     #       averageUtilization: 75
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: keda-remeshworker-scaler
+  namespace: default
+  annotations:
+    scaledobject.keda.sh/transfer-hpa-ownership: "true"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: remeshworker
+  pollingInterval:  15
+  cooldownPeriod:  300
+  idleReplicaCount: 0                                       
+  minReplicaCount: ${REMESHWORKER_MIN_REPLICAS}  
+  maxReplicaCount: ${REMESHWORKER_MAX_REPLICAS}
+  advanced:                                                 # Optional. Section to specify advanced options
+    horizontalPodAutoscalerConfig:                          # Optional. Section to specify HPA related options
+      name: remeshworker-scaler
+
+  triggers:
+#   - type: external
+#     metadata:
+#       metricName: pubsub.googleapis.com|subscription|num_undelivered_messages
+#       targetValue: "1"
+  - type: gcp-pubsub
+    metadata:
+      mode: "SubscriptionSize" # Optional - Default is SubscriptionSize - SubscriptionSize or OldestUnackedMessageAge
+      # aggregation: "sum" # Optional - Only meaningful for distribution-valued metrics
+      value: "10" # Optional - Default is 10
+      activationValue: "1" # Optional - Default is 0
+      # Exactly one of the subscription or topic name options is required
+      subscriptionName: ${PYCHUNKEDGRAPH_LOW_PRIORITY_REMESH_QUEUE}
+      # topicName: "projects/lund-vision-group-cave/topics/local-2023c_PCG_EDIT" # todo: change to env var
+      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -63,6 +100,11 @@ spec:
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /root/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
+                  key: ${GOOGLE_SECRET_FILENAME}
             - name: REDIS_SERVICE_HOST
               value: ${REDIS_HOST}
             - name: REDIS_SERVICE_PORT
