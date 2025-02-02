@@ -1,42 +1,153 @@
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: celery-producer-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: celery-producer
+#   minReplicas: ${CELERY_PRODUCER_MIN_REPLICAS}
+#   maxReplicas: ${CELERY_PRODUCER_MAX_REPLICAS}
+#   metrics:
+#     - type: Pods
+#       pods:
+#         metric:
+#           name: custom.googleapis.com|http|celery_queue_length
+#         target:
+#           type: AverageValue
+#           averageValue: 1
+# ---
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: celery-consumer-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: celery-consumer
+#   minReplicas: ${CELERY_CONSUMER_MIN_REPLICAS}
+#   maxReplicas: ${CELERY_CONSUMER_MAX_REPLICAS}
+#   metrics:
+#     - type: Pods
+#       pods:
+#         metric:
+#           name: custom.googleapis.com|http|celery_queue_length
+#         target:
+#           type: AverageValue
+#           averageValue: "2"
+# ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: materialization-db-secret
+  namespace: default
+type: Opaque
+stringData:
+  redis_password: ${MAT_REDIS_PASSWORD}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-trigger-mat-auth-redis-secret
+  namespace: default
+spec:
+  secretTargetRef:
+  - parameter: password
+    name: materialization-db-secret
+    key: redis_password
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
   name: celery-producer-scaler
+  namespace: default
+  labels:
+    scaledobject.keda.sh/name: celery-producer-scaler
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: celery-producer
-  minReplicas: ${CELERY_PRODUCER_MIN_REPLICAS}
-  maxReplicas: ${CELERY_PRODUCER_MAX_REPLICAS}
-  metrics:
-    - type: Pods
-      pods:
-        metric:
-          name: custom.googleapis.com|http|celery_queue_length
-        target:
-          type: AverageValue
-          averageValue: 1
+  pollingInterval:  300 # 5 minutes
+  cooldownPeriod:  600  # 10 minutes
+  # idleReplicaCount: 0                                       
+  minReplicaCount: ${CELERY_PRODUCER_MIN_REPLICAS}        
+  maxReplicaCount: ${CELERY_PRODUCER_MAX_REPLICAS}
+  triggers:
+  - type: redis
+    metadata:
+      address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
+      listName: ${PRODUCER_QUEUE_NAME} # Required
+      listLength: "15" # Required
+      activationListLength: "0" # optional > 0 not >=
+      databaseIndex: "0" # optional
+    authenticationRef:
+      name: keda-trigger-mat-auth-redis-secret
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
   name: celery-consumer-scaler
+  namespace: default
+  labels:
+    scaledobject.keda.sh/name: celery-consumer-scaler
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: celery-consumer
-  minReplicas: ${CELERY_CONSUMER_MIN_REPLICAS}
-  maxReplicas: ${CELERY_CONSUMER_MAX_REPLICAS}
-  metrics:
-    - type: Pods
-      pods:
-        metric:
-          name: custom.googleapis.com|http|celery_queue_length
-        target:
-          type: AverageValue
-          averageValue: 2
+  pollingInterval:  300 # 5 minutes
+  cooldownPeriod:  600  # 10 minutes
+  # idleReplicaCount: 0                                       
+  minReplicaCount:  ${CELERY_PRODUCER_MIN_REPLICAS}        
+  maxReplicaCount:  ${CELERY_PRODUCER_MAX_REPLICAS}
+  triggers:
+  - type: redis
+    metadata:
+      address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
+      listName: ${CONSUMER_QUEUE_NAME} # Required
+      listLength: "10" # Required
+      activationListLength: "0" # optional > 0 not >=
+      databaseIndex: "0" # optional
+    authenticationRef:
+      name: keda-trigger-mat-auth-redis-secret
+  - type: redis
+    metadata:
+      address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
+      listName: ${PRODUCER_QUEUE_NAME} # Required
+      listLength: "100" # Required
+      activationListLength: "0" # optional > 0 not >=
+      databaseIndex: "0" # optional
+    authenticationRef:
+      name: keda-trigger-mat-auth-redis-secret
+# ---
+# apiVersion: keda.sh/v1alpha1
+# kind: ScaledObject
+# metadata:
+#   name: celery-consumer-scaler
+#   namespace: default
+#   labels:
+#     scaledobject.keda.sh/name: celery-consumer-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: celery-consumer
+#   pollingInterval:  300 # 5 minutes
+#   cooldownPeriod:  600  # 10 minutes
+#   idleReplicaCount: 0                                       
+#   minReplicaCount:  ${CELERY_PRODUCER_MIN_REPLICAS}        
+#   maxReplicaCount:  ${CELERY_PRODUCER_MAX_REPLICAS}
+#   triggers:
+#   - type: prometheus
+#     metadata:
+#       serverAddress: http://celery-exporter:9091
+#       metricName: celery_queue_length
+#       query: sum(rate(celery_tasks_total{state="RECEIVED"}[2m]))
+#       threshold: '10'
+#       enableAuthentication: "false"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -72,56 +183,31 @@ spec:
         - name: graceful-shut-down
           emptyDir: {}
       containers:
-        - name: celery-exporter
-          image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
-          command: ["python"]
-          args:
-            - cli.py
-            - --broker-url
-            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
-            - --port
-            - "9540"
-            - -q
-            - ${PRODUCER_QUEUE_NAME}
-          ports:
-            - containerPort: 9540
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  [
-                    "sh",
-                    "-c",
-                    "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
-                  ]
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
-        - name: prometheus-to-sd
-          image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
-          command: ["/monitor"]
-          args:
-            - --source=http://localhost:9540/metrics
-            - --stackdriver-prefix=custom.googleapis.com
-            - --pod-id=$(POD_ID)
-            - --namespace-id=$(POD_NAMESPACE)
-          env:
-            # save Kubernetes metadata as environment variables for use in metrics
-            - name: POD_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.uid
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
+        # - name: celery-exporter
+        #   image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
+        #   command: ["python"]
+        #   args:
+        #     - cli.py
+        #     - --broker-url
+        #     - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+        #     - --port
+        #     - "9540"
+        #     - -q
+        #     - ${PRODUCER_QUEUE_NAME}
+        #   ports:
+        #     - containerPort: 9540
+        #   lifecycle:
+        #     preStop:
+        #       exec:
+        #         command:
+        #           [
+        #             "sh",
+        #             "-c",
+        #             "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
+        #           ]
+        #   volumeMounts:
+        #     - name: graceful-shut-down
+        #       mountPath: /home/nginx/tmp/shutdown
         - name: celery
           image: ${DOCKER_REPOSITORY}/materializationengine:v${MATERIALIZE_VERSION}
           args:
@@ -230,10 +316,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${MESH_POOL}"
+          value: "${STANDARD_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${MESH_POOL}
+        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
       volumes:
         - name: materializationengine-config-volume
           configMap:
@@ -247,56 +333,31 @@ spec:
         - name: graceful-shut-down
           emptyDir: {}
       containers:
-        - name: celery-exporter
-          image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
-          command: ["python"]
-          args:
-            - cli.py
-            - --broker-url
-            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
-            - --port
-            - "9540"
-            - -q
-            - ${CONSUMER_QUEUE_NAME}
-          ports:
-            - containerPort: 9540
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  [
-                    "sh",
-                    "-c",
-                    "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
-                  ]
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
-        - name: prometheus-to-sd
-          image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
-          command: ["/monitor"]
-          args:
-            - --source=http://localhost:9540/metrics
-            - --stackdriver-prefix=custom.googleapis.com
-            - --pod-id=$(POD_ID)
-            - --namespace-id=$(POD_NAMESPACE)
-          env:
-            # save Kubernetes metadata as environment variables for use in metrics
-            - name: POD_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.uid
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
+        # - name: celery-exporter
+        #   image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
+        #   command: ["python"]
+        #   args:
+        #     - cli.py
+        #     - --broker-url
+        #     - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+        #     - --port
+        #     - "9540"
+        #     - -q
+        #     - ${CONSUMER_QUEUE_NAME}
+        #   ports:
+        #     - containerPort: 9540
+        #   lifecycle:
+        #     preStop:
+        #       exec:
+        #         command:
+        #           [
+        #             "sh",
+        #             "-c",
+        #             "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
+        #           ]
+        #   volumeMounts:
+        #     - name: graceful-shut-down
+        #       mountPath: /home/nginx/tmp/shutdown
         - name: celery
           image: ${DOCKER_REPOSITORY}/materializationengine:v${MATERIALIZE_VERSION}
           args:
@@ -513,7 +574,7 @@ spec:
           image: mher/flower:2.0.1
           args:
             - celery
-            - --broker=redis://${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+            - --broker=redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
             - flower
             - --port=5555
             - --purge_offline_workers=1
