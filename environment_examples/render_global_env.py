@@ -12,12 +12,12 @@ def create_spaced_list_of_strings(l):
 
 
 var_dict = {
-    "environment_name": "global-2023d",
+    "environment_name": "global-2025",
     "project_name": "heinze-lab-daf-global",
     "depl_region": "europe-west3",
     "depl_zone": "europe-west3-b",
-    "dns_zone": "connectomics-braininbrain-org",
-    "domain_name": "connectomics.braininbrain.org",
+    "dns_zone": "global-staging-connectomics-braininbrain-org",
+    "domain_name": "global-staging.connectomics.braininbrain.org",
     "letsencrypt_email": "kevin@tedore.com",
     "docker_repository": "docker.io/caveconnectome",
     "add_dns_hostnames": [
