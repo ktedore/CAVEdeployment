@@ -241,6 +241,8 @@ spec:
               value: ${DATA_PROJECT_NAME}
             - name: BIGTABLE_INSTANCE
               value: ${BIGTABLE_INSTANCE_NAME}
+            - name: LOCAL_SERVER_URL
+              value: "http://pychunkedgraph-read-service"
             - name: STICKY_AUTH_URL
               value: ${STICKY_AUTH_URL}
             - name: AUTH_URL
@@ -387,6 +389,8 @@ spec:
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
               value: ${AUTH_URI}
+            - name: LOCAL_SERVER_URL
+              value: "http://pychunkedgraph-read-service"
             - name: BIGTABLE_PROJECT
               value: ${DATA_PROJECT_NAME}
             - name: BIGTABLE_INSTANCE

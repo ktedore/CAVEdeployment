@@ -3,12 +3,13 @@ source $ENV_REPO_PATH/$1.sh
 
 mkdir -p ${YAML_FOLDER}
 envsubst < kubetemplates/pcgl2cache.yml > ${YAML_FOLDER}/pcgl2cache.yml
+envsubst < kubetemplates/skeletoncache.yml > ${YAML_FOLDER}/skeletoncache.yml
 envsubst < kubetemplates/annotation.yml > ${YAML_FOLDER}/annotation.yml
 envsubst < kubetemplates/ingress.yml > ${YAML_FOLDER}/ingress.yml
 envsubst < kubetemplates/ingress-service.yml > ${YAML_FOLDER}/ingress-service.yml
 envsubst < kubetemplates/materialize.yml > ${YAML_FOLDER}/materialize.yml
 envsubst < kubetemplates/materialize_worker.yml > ${YAML_FOLDER}/materialize_worker.yml
-envsubst < kubetemplates/materialize_migrate.yml > ${YAML_FOLDER}/materialize_migrate.yml
+envsubst < kubetemplates/materialize_migrations.yml > ${YAML_FOLDER}/materialize_migrations.yml
 envsubst < kubetemplates/pychunkedgraph.yml > ${YAML_FOLDER}/pychunkedgraph.yml
 envsubst < kubetemplates/meshing.yml > ${YAML_FOLDER}/meshing.yml
 envsubst < kubetemplates/nglstate.yml > ${YAML_FOLDER}/nglstate.yml

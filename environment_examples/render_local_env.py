@@ -41,6 +41,7 @@ var_dict = {
     "dash_secret_key": "E!8W&iL8KBu#EHG&DS",
     "dash_config_filename": "${ENV_REPO_PATH}/my_dash_config.py",
     "l2cache_config_filename": "${ENV_REPO_PATH}/my_l2cache_config.yml",
+    "skeleton_cache_bucket": "gs://my_skeleton_cache_bucket",
     "proxy_map": "'datastack1': 'https://storage.googleapis.com/datastack1_imagery'}",
     "ann_excluded_permission_groups": ["default"],
     "redis_password": "PoZjTzxr7BunrcU_KNj!",

@@ -86,9 +86,13 @@ spec:
               value: "false"
             - name: DAF_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
+            - name: PMANAGEMENT_PROOFREADING_TABLE
+              value: ${PMANAGEMENT_PROOFREADING_TABLE}
+            - name: PMANAGEMENT_NEURONINFORMATION_TABLE
+              value: ${PMANAGEMENT_NEURONINFORMATION_TABLE}
           resources:
             requests:
-              memory: 1000Mi
+              memory: 950Mi
               cpu: 100m
           readinessProbe:
             httpGet:
