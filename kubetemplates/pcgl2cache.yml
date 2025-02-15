@@ -9,24 +9,39 @@ ${PCG_CONFIG}
   L2_table_map.yml: |
 ${L2CACHE_CONFIG}
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: pcgl2cache-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: pcgl2cache
+#   minReplicas: ${PCGL2CACHE_MIN_REPLICAS}
+#   maxReplicas: ${PCGL2CACHE_MAX_REPLICAS}
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 90
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: pcgl2cache-scaler
+  name: keda-pcgl2cache-scaler
+  namespace: default
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
     name: pcgl2cache
-  minReplicas: ${PCGL2CACHE_MIN_REPLICAS}
-  maxReplicas: ${PCGL2CACHE_MAX_REPLICAS}
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 90
+  minReplicaCount: ${PCGL2CACHE_MIN_REPLICAS}
+  maxReplicaCount: ${PCGL2CACHE_MAX_REPLICAS}
+  triggers:
+  - type: cpu
+    metricType: AverageValue # Allowed types are 'Utilization' or 'AverageValue'
+    metadata:
+      value: "90"
 ---
 apiVersion: v1
 kind: Service
@@ -84,6 +99,11 @@ spec:
               value: /app/pcgl2cache/app/instance/L2_table_map.yml
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
+                  key: ${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
               value: ${AUTH_URI}
             - name: STICKY_AUTH_URL
@@ -149,74 +169,151 @@ spec:
               memory: 10Mi
               cpu: 5m
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: pcgl2cache-worker-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: pcgl2cache-worker
+#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
+#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+#   metrics:
+#     - external:
+#         metric:
+#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
+#           selector:
+#             matchLabels:
+#               resource.labels.subscription_id: ${L2CACHE_UPDATE_QUEUE}
+#         target:
+#           type: AverageValue
+#           averageValue: 1
+#       type: External
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: pcgl2cache-worker-scaler
+  name: keda-pcgl2cache-worker-scaler
+  namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: pcgl2cache-worker
-  minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-  maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-  metrics:
-    - external:
-        metric:
-          name: pubsub.googleapis.com|subscription|num_undelivered_messages
-          selector:
-            matchLabels:
-              resource.labels.subscription_id: ${L2CACHE_UPDATE_QUEUE}
-        target:
-          type: AverageValue
-          averageValue: 1
-      type: External
+  pollingInterval:  15
+  cooldownPeriod:  300
+  idleReplicaCount: 0                                       
+  minReplicaCount: ${PCGL2CACHE_WORKER_MIN_REPLICAS}  
+  maxReplicaCount: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+
+  triggers:
+  - type: gcp-pubsub
+    metadata:
+      mode: "SubscriptionSize" # Optional - Default is SubscriptionSize - SubscriptionSize or OldestUnackedMessageAge
+      # aggregation: "sum" # Optional - Only meaningful for distribution-valued metrics
+      value: "10" # Optional - Default is 10
+      activationValue: "1" # Optional - Default is 0
+      # Exactly one of the subscription or topic name options is required
+      subscriptionName: ${L2CACHE_UPDATE_QUEUE}
+      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: pcgl2cache-lowpriorityworker-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: pcgl2cache-lowpriority-worker
+#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
+#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+#   metrics:
+#     - external:
+#         metric:
+#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
+#           selector:
+#             matchLabels:
+#               resource.labels.subscription_id: ${L2CACHE_TRIGGER_LOW_PRIORITY_QUEUE}
+#         target:
+#           type: AverageValue
+#           averageValue: 1
+#       type: External
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: pcgl2cache-lowpriorityworker-scaler
+  name: keda-pcgl2cache-lowpriorityworker-scaler
+  namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: pcgl2cache-lowpriority-worker
-  minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-  maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-  metrics:
-    - external:
-        metric:
-          name: pubsub.googleapis.com|subscription|num_undelivered_messages
-          selector:
-            matchLabels:
-              resource.labels.subscription_id: ${L2CACHE_TRIGGER_LOW_PRIORITY_QUEUE}
-        target:
-          type: AverageValue
-          averageValue: 1
-      type: External
+  pollingInterval:  15
+  cooldownPeriod:  300
+  idleReplicaCount: 0                                       
+  minReplicaCount: ${PCGL2CACHE_WORKER_MIN_REPLICAS}  
+  maxReplicaCount: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+
+  triggers:
+  - type: gcp-pubsub
+    metadata:
+      mode: "SubscriptionSize"
+      value: "10" # Optional - Default is 10
+      activationValue: "1" # Optional - Default is 0
+      subscriptionName: ${L2CACHE_TRIGGER_LOW_PRIORITY_QUEUE}
+      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: pcgl2cache-highpriorityworker-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: pcgl2cache-highpriority-worker
+#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
+#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+#   metrics:
+#     - external:
+#         metric:
+#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
+#           selector:
+#             matchLabels:
+#               resource.labels.subscription_id: ${L2CACHE_TRIGGER_QUEUE}
+#         target:
+#           type: AverageValue
+#           averageValue: 1
+#       type: External
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: pcgl2cache-highpriorityworker-scaler
+  name: keda-pcgl2cache-highpriorityworker-scaler
+  namespace: default
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: pcgl2cache-highpriority-worker
-  minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-  maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-  metrics:
-    - external:
-        metric:
-          name: pubsub.googleapis.com|subscription|num_undelivered_messages
-          selector:
-            matchLabels:
-              resource.labels.subscription_id: ${L2CACHE_TRIGGER_QUEUE}
-        target:
-          type: AverageValue
-          averageValue: 1
-      type: External
+  pollingInterval:  15
+  cooldownPeriod:  300
+  idleReplicaCount: 0                                       
+  minReplicaCount: ${PCGL2CACHE_WORKER_MIN_REPLICAS}  
+  maxReplicaCount: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
+
+  triggers:
+  - type: gcp-pubsub
+    metadata:
+      mode: "SubscriptionSize"
+      value: "10" # Optional - Default is 10
+      activationValue: "1" # Optional - Default is 0
+      subscriptionName: ${L2CACHE_TRIGGER_QUEUE}
+      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -262,6 +359,11 @@ spec:
               value: /app/pcgl2cache/app/instance/L2_table_map.yml
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
+                  key: ${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
               value: ${AUTH_URI}
             - name: STICKY_AUTH_URL
@@ -344,6 +446,11 @@ spec:
               value: /app/pcgl2cache/app/instance/L2_table_map.yml
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
+                  key: ${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
               value: ${AUTH_URI}
             - name: STICKY_AUTH_URL
@@ -426,6 +533,11 @@ spec:
               value: /app/pcgl2cache/app/instance/L2_table_map.yml
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
+                  key: ${GOOGLE_SECRET_FILENAME}
             - name: AUTH_URI
               value: ${AUTH_URI}
             - name: STICKY_AUTH_URL

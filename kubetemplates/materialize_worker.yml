@@ -72,7 +72,7 @@ spec:
     name: celery-producer
   pollingInterval:  300 # 5 minutes
   cooldownPeriod:  600  # 10 minutes
-  # idleReplicaCount: 0                                       
+  idleReplicaCount: 0                                       
   minReplicaCount: ${CELERY_PRODUCER_MIN_REPLICAS}        
   maxReplicaCount: ${CELERY_PRODUCER_MAX_REPLICAS}
   triggers:
@@ -100,7 +100,7 @@ spec:
     name: celery-consumer
   pollingInterval:  300 # 5 minutes
   cooldownPeriod:  600  # 10 minutes
-  # idleReplicaCount: 0                                       
+  idleReplicaCount: 0                                       
   minReplicaCount:  ${CELERY_PRODUCER_MIN_REPLICAS}        
   maxReplicaCount:  ${CELERY_PRODUCER_MAX_REPLICAS}
   triggers:
@@ -318,10 +318,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${STANDARD_POOL}"
+          value: "${MESH_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
+        cloud.google.com/gke-nodepool: ${MESH_POOL}
       volumes:
         - name: materializationengine-config-volume
           configMap:
