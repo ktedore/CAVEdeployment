@@ -42,7 +42,7 @@ spec:
     name: remeshworker
   pollingInterval:  15
   cooldownPeriod:  300
-  idleReplicaCount: 0                                       
+  idleReplicaCount: 0
   minReplicaCount: ${REMESHWORKER_MIN_REPLICAS}  
   maxReplicaCount: ${REMESHWORKER_MAX_REPLICAS}
   advanced:                                                 # Optional. Section to specify advanced options
@@ -137,6 +137,9 @@ spec:
             requests:
               memory: 3000Mi
               cpu: 800m
+            limits:
+              memory: 4000Mi
+              cpu: 1000m
           command:
             - /bin/sh
             - -c
