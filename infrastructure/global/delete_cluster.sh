@@ -1,6 +1,8 @@
 source env_config.sh
 source $ENV_REPO_PATH/$1.sh
 
+./infrastructure/global/switch_context.sh $1
+
 if [ "$#" == 1 ]; then
     gcloud container clusters delete $CLUSTER_NAME
     gcloud compute addresses delete $CLUSTER_NAME --region=$REGION
