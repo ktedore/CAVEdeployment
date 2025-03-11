@@ -148,29 +148,6 @@ spec:
             requests:
               memory: 10Mi
               cpu: 5m
-# ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: skeletoncache-worker-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: skeletoncache-worker
-#   minReplicas: ${SKELETONCACHE_WORKER_MIN_REPLICAS}
-#   maxReplicas: ${SKELETONCACHE_WORKER_MAX_REPLICAS}
-#   metrics:
-#     - external:
-#         metric:
-#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
-#           selector:
-#             matchLabels:
-#               resource.labels.subscription_id: ${SKELETON_CACHE_RETRIEVE_QUEUE}
-#         target:
-#           type: AverageValue
-#           averageValue: 1
-#       type: External
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -184,17 +161,23 @@ spec:
     name: skeletoncache-worker
   pollingInterval:  15
   cooldownPeriod:  300
-  idleReplicaCount: 0                                       
+  idleReplicaCount: 1                                       
   minReplicaCount: ${SKELETONCACHE_WORKER_MIN_REPLICAS} 
   maxReplicaCount: ${SKELETONCACHE_WORKER_MAX_REPLICAS}
-
   triggers:
   - type: gcp-pubsub
     metadata:
       mode: "SubscriptionSize"
-      value: "10" # Optional - Default is 10
+      value: "1" # Optional - Default is 10
       activationValue: "0" # Optional - Default is 0
-      subscriptionName: ${SKELETON_CACHE_RETRIEVE_QUEUE}
+      subscriptionName: ${SKELETON_CACHE_LOW_PRIORITY_EXCHANGE}
+      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
+  - type: gcp-pubsub
+    metadata:
+      mode: "SubscriptionSize"
+      value: "1" # Optional - Default is 10
+      activationValue: "0" # Optional - Default is 0
+      subscriptionName: ${SKELETON_CACHE_HIGH_PRIORITY_EXCHANGE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
 apiVersion: apps/v1

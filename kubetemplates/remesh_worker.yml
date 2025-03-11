@@ -59,7 +59,7 @@ spec:
       mode: "SubscriptionSize" # Optional - Default is SubscriptionSize - SubscriptionSize or OldestUnackedMessageAge
       # aggregation: "sum" # Optional - Only meaningful for distribution-valued metrics
       value: "10" # Optional - Default is 10
-      activationValue: "1" # Optional - Default is 0
+      # activationValue: "1" # Optional - Default is 0
       # Exactly one of the subscription or topic name options is required
       subscriptionName: ${PYCHUNKEDGRAPH_LOW_PRIORITY_REMESH_QUEUE}
       # topicName: "projects/lund-vision-group-cave/topics/local-2023c_PCG_EDIT" # todo: change to env var
