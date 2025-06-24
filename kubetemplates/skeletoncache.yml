@@ -127,12 +127,18 @@ spec:
               value: ${INFO_URL}
             - name: PROJECT_NAME
               value: ${PROJECT_NAME}
+            - name: LIMITER_CATEGORIES
+              value: "${SK_LIMITER_CATEGORIES}"
+            - name: LIMITER_URI
+              value: ${LIMITER_URI}
             - name: SKELETONSERVICE_SETTINGS
               value: "/app/skeletoncache/app/instance/config.cfg"
             - name: APP_SETTINGS
               value: "skeletoncache.app.config.DevelopmentConfig"
             - name: DAF_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
+            - name: CACHE_NON_H5_SKELETONS
+              value: "false"
             - name: SKELETON_CACHE_LOW_PRIORITY_EXCHANGE
               value: ${SKELETON_CACHE_LOW_PRIORITY_EXCHANGE}
             - name: SKELETON_CACHE_HIGH_PRIORITY_EXCHANGE
@@ -141,6 +147,12 @@ spec:
               value: ${SKELETON_CACHE_LOW_PRIORITY_RETRIEVE_QUEUE}
             - name: SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE
               value: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
+            - name: SKELETON_CACHE_DEAD_LETTER_RETRIEVE_QUEUE
+              value: ${SKELETON_CACHE_DEAD_LETTER_RETRIEVE_QUEUE}
+            - name: VERBOSE_LEVEL
+              value: "0"
+            - name: DEBUG_ROOT_ID
+              value: "864691137021499502"
           resources:
             requests:
               memory: 600Mi
@@ -246,6 +258,28 @@ spec:
       subscriptionName: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: skeleton-worker-vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: skeletoncache-worker
+  updatePolicy:
+    updateMode: Auto
+  resourcePolicy:
+    containerPolicies:
+    - containerName: 'skeletoncache-worker'
+      minAllowed:
+        cpu: 50m     
+        memory: 200Mi 
+      maxAllowed:
+        cpu: 1000m        
+        memory: 2Gi    
+      controlledResources: ["cpu", "memory"]
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -315,6 +349,8 @@ spec:
               value: ${DATA_PROJECT_NAME}
             - name: PROJECT_NAME
               value: ${PROJECT_NAME}
+            - name: CACHE_NON_H5_SKELETONS
+              value: "false"
             - name: SKELETON_CACHE_LOW_PRIORITY_EXCHANGE
               value: ${SKELETON_CACHE_LOW_PRIORITY_EXCHANGE}
             - name: SKELETON_CACHE_HIGH_PRIORITY_EXCHANGE
@@ -323,17 +359,104 @@ spec:
               value: ${SKELETON_CACHE_LOW_PRIORITY_RETRIEVE_QUEUE}
             - name: SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE
               value: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
+            - name: SKELETON_CACHE_DEAD_LETTER_RETRIEVE_QUEUE
+              value: ${SKELETON_CACHE_DEAD_LETTER_RETRIEVE_QUEUE}
+            - name: VERBOSE_LEVEL
+              value: "0"
+            - name: DEBUG_ROOT_ID
+              value: "864691135359413848"
             - name: AUTH_USE_REDIS
               value: "false"
             - name: DAF_CREDENTIALS
               value: /root/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
           resources:
             requests:
-              memory: 2500Mi
-              cpu: 250m
+              memory: 500Mi
+              cpu: 50m
           command:
             - /bin/sh
             - -c
             - python -u -m skeletonservice.datasets.messaging
-
-            
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skeletoncache-integration-tester
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: skeletoncache-integration-tester
+    spec:
+      restartPolicy: OnFailure
+      tolerations:
+        - key: "pool"
+          operator: "Equal"
+          value: "${MESH_POOL}"
+          effect: "NoSchedule"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: ${MESH_POOL}
+      volumes:
+        - name: google-cloud-key
+          secret:
+            secretName: ${SKELETON_SERVICE_ACCOUNT_SECRET}
+        - name: sksv-config-volume
+          configMap:
+            name: skeletoncache-config-v${SKELETONCACHE_CONFIG_VERSION}
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: skeletoncache-integration-tester
+          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: google-cloud-key
+              mountPath: /root/.cloudvolume/secrets
+            - name: sksv-config-volume
+              mountPath: /app/skeletoncache/app/instance/
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /root/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+            - name: GLOBAL_SERVER_URL
+              value: https://${GLOBAL_SERVER}
+            - name: AUTH_URI
+              value: ${AUTH_URI}
+            - name: STICKY_AUTH_URL
+              value: ${STICKY_AUTH_URL}
+            - name: BIGTABLE_PROJECT
+              value: ${DATA_PROJECT_NAME}
+            - name: BIGTABLE_INSTANCE
+              value: ${BIGTABLE_INSTANCE_NAME}
+            - name: AUTH_URL
+              value: ${AUTH_URL}
+            - name: INFO_URL
+              value: ${INFO_URL}
+            - name: APP_SETTINGS
+              value: "skeletoncache.app.config.DevelopmentConfig"
+            - name: SKELETON_CACHE_URL_PREFIX
+              value: sksv
+            - name: PROJECT_ID
+              value: ${DATA_PROJECT_NAME}
+            - name: PROJECT_NAME
+              value: ${PROJECT_NAME}
+            - name: DEV_SLACK_WEBHOOK_ID
+              value: "T0CL3AB5X/B08KJ36BJAF/DfcLRvJzizvCaozpMugAnu38"  # Keith Wiley's Slack direct messages
+            - name: PROD_SLACK_WEBHOOK_ID
+              value: "T0CL3AB5X/B08P52E7A05/iXHgqifbk8MtpDw4adoSh5pW"  # deployment-hour-alerts channel
+            - name: VERBOSE_LEVEL
+              value: "1"
+            - name: AUTH_USE_REDIS
+              value: "false"
+            - name: DAF_CREDENTIALS
+              value: /root/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
+          resources:
+            requests:
+              memory: 500Mi
+              cpu: 50m
+          command:
+            - /bin/sh
+            - -c
+            # You need to verify or change the value of the -d argument each time you deploy. Options are listed in the corresponding PrinceAllenCAVE config file.
+            - python -u -m tests.test_integration --kube -s ${SKELETON_INTEGRATION_TEST_SERVER} -d ${SKELETON_INTEGRATION_TEST_DATASTACK__DEFAULT} -z ${ZONE} -c ${CLUSTER_NAME} -v 2

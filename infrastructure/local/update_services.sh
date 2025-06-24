@@ -1,7 +1,11 @@
 source env_config.sh
 source $ENV_REPO_PATH/$1.sh
+source ./infrastructure/local/convert_variables.sh
 
 ./infrastructure/local/switch_context.sh $1
+
+source $ENV_REPO_PATH/$1.sh
+source ./infrastructure/local/convert_variables.sh
 
 #export REDIS_IP="$(gcloud redis instances describe $REDIS_NAME --region=$REGION | sed -n -e 's/^host: \(.*\)$/\1/p')"
 ./infrastructure/local/create_yaml_files_from_templates.sh $1
@@ -42,6 +46,12 @@ pprogress
 pmanagement
 cavecanary)
 
+# We have to explicitly delete the skeleton service integration test job before running a new one.
+# Kubernetes won't do this for us.
+if kubectl get job skeletoncache-integration-tester &> /dev/null; then
+    echo "Deleting integration test job: skeletoncache-integration-tester"
+    kubectl delete job skeletoncache-integration-tester
+fi
 
 for i in $(seq 0 1 $((${#MAX_REPLICA_ARRAY[@]}-1))); do
   echo $i
