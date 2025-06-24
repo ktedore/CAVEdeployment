@@ -1,43 +1,3 @@
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: celery-producer-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: celery-producer
-#   minReplicas: ${CELERY_PRODUCER_MIN_REPLICAS}
-#   maxReplicas: ${CELERY_PRODUCER_MAX_REPLICAS}
-#   metrics:
-#     - type: Pods
-#       pods:
-#         metric:
-#           name: custom.googleapis.com|http|celery_queue_length
-#         target:
-#           type: AverageValue
-#           averageValue: 1
-# ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: celery-consumer-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: celery-consumer
-#   minReplicas: ${CELERY_CONSUMER_MIN_REPLICAS}
-#   maxReplicas: ${CELERY_CONSUMER_MAX_REPLICAS}
-#   metrics:
-#     - type: Pods
-#       pods:
-#         metric:
-#           name: custom.googleapis.com|http|celery_queue_length
-#         target:
-#           type: AverageValue
-#           averageValue: "2"
-# ---
 apiVersion: v1
 kind: Secret
 metadata:
@@ -54,9 +14,9 @@ metadata:
   namespace: default
 spec:
   secretTargetRef:
-  - parameter: password
-    name: materialization-db-secret
-    key: redis_password
+    - name: materialization-db-secret
+      key: redis_password
+      parameter: password
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -70,9 +30,9 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: celery-producer
-  pollingInterval:  300 # 5 minutes
-  cooldownPeriod:  3600  # 60 minutes
-  idleReplicaCount: 1                                       
+  pollingInterval: 60 # 5 minutes
+  cooldownPeriod: 3600  # 60 minutes
+  idleReplicaCount: 0                                       
   minReplicaCount: ${CELERY_PRODUCER_MIN_REPLICAS}        
   maxReplicaCount: ${CELERY_PRODUCER_MAX_REPLICAS}
   triggers:
@@ -80,7 +40,7 @@ spec:
     metadata:
       address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
       listName: ${PRODUCER_QUEUE_NAME} # Required
-      listLength: "1" # Required
+      listLength: "5" # Required
       # activationListLength: "0" # optional > 0 not >=
       # databaseIndex: "0" # optional
     authenticationRef:
@@ -96,37 +56,23 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: celery-consumer-scaler
+  name: keda-celery-consumer-scaler
   namespace: default
   labels:
-    scaledobject.keda.sh/name: celery-consumer-scaler
+    scaledobject.keda.sh/name: keda-celery-consumer-scaler
+# annotations:
+#   scaledobject.keda.sh/transfer-hpa-ownership: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: celery-consumer
-  pollingInterval:  300 # 5 minutes
-  cooldownPeriod:  3600  # 10 minutes
-  idleReplicaCount: 1                                       
-  minReplicaCount:  ${CELERY_CONSUMER_MIN_REPLICAS}        
+  pollingInterval:  60 # 5 minutes
+  cooldownPeriod:  3600  # 60 minutes
+  idleReplicaCount: 1
+  minReplicaCount:  ${CELERY_CONSUMER_MIN_REPLICAS}
   maxReplicaCount:  ${CELERY_CONSUMER_MAX_REPLICAS}
   triggers:
-  # - type: redis
-  #   metadata:
-  #     address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
-  #     listName: ${CONSUMER_QUEUE_NAME} # Required
-  #     listLength: "2" # Required
-  #     # activationListLength: "0" # optional > 0 not >=
-  #     # databaseIndex: "0" # optional
-  #   authenticationRef:
-  #     name: keda-trigger-mat-auth-redis-secret
-  # - type: prometheus
-  #   metadata:
-  #     serverAddress: http://celery-exporter:9540
-  #     metricName: celery_queue_length
-  #     query: sum(rate(celery_tasks_total{state="RECEIVED"}[2m]))
-  #     threshold: '2'
-
   - type: redis
     metadata:
       address: ${MAT_REDIS_HOST}:${MAT_REDIS_PORT} # Format must be host:port
@@ -136,34 +82,14 @@ spec:
       # databaseIndex: "0" # optional
     authenticationRef:
       name: keda-trigger-mat-auth-redis-secret
-# ---
-# # already commented out 
-# # apiVersion: keda.sh/v1alpha1
-# # kind: ScaledObject
-# # metadata:
-# #   name: celery-consumer-scaler
-# #   namespace: default
-# #   labels:
-# #     scaledobject.keda.sh/name: celery-consumer-scaler
-# # spec:
-# #   scaleTargetRef:
-# #     apiVersion: apps/v1
-# #     kind: Deployment
-# #     name: celery-consumer
-# #   pollingInterval:  300 # 5 minutes
-# #   cooldownPeriod:  600  # 10 minutes
-# #   idleReplicaCount: 0                                       
-# #   minReplicaCount:  ${CELERY_PRODUCER_MIN_REPLICAS}        
-# #   maxReplicaCount:  ${CELERY_PRODUCER_MAX_REPLICAS}
-# #   triggers:
-# #   - type: prometheus
-# #     metadata:
-# #       serverAddress: http://celery-exporter:9091
-# #       metricName: celery_queue_length
-# #       query: sum(rate(celery_tasks_total{state="RECEIVED"}[2m]))
-# #       threshold: '10'
-# #       enableAuthentication: "false"
-# ---
+  # - type: prometheus
+  #   metadata:
+  #     serverAddress: http://celery-exporter:9540
+  #     metricName: celery_queue_length
+  #     query: sum(rate(celery_tasks_total{state="RECEIVED"}[2m]))
+  #     threshold: '2'
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -177,7 +103,7 @@ spec:
       labels:
         app: celery-producer
     spec:
-      terminationGracePeriodSeconds: 6000 # change grace period to one hour
+      terminationGracePeriodSeconds: 3600 # change grace period to one hour
       tolerations:
         - key: "pool"
           operator: "Equal"
@@ -198,31 +124,31 @@ spec:
         - name: graceful-shut-down
           emptyDir: {}
       containers:
-        - name: celery-exporter
-          image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
-          command: ["python"]
-          args:
-            - cli.py
-            - --broker-url
-            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
-            - --port
-            - "9540"
-            - -q
-            - ${PRODUCER_QUEUE_NAME}
-          ports:
-            - containerPort: 9540
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  [
-                    "sh",
-                    "-c",
-                    "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
-                  ]
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
+        # - name: celery-exporter
+          # image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
+          # command: ["python"]
+          # args:
+          #   - cli.py
+          #   - --broker-url
+          #   - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+          #   - --port
+          #   - "9540"
+          #   - -q
+          #   - ${PRODUCER_QUEUE_NAME}
+          # ports:
+          #   - containerPort: 9540
+          # lifecycle:
+          #   preStop:
+          #     exec:
+          #       command:
+          #         [
+          #           "sh",
+          #           "-c",
+          #           "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
+          #         ]
+          # volumeMounts:
+          #   - name: graceful-shut-down
+          #     mountPath: /home/nginx/tmp/shutdown
         - name: celery
           image: ${DOCKER_REPOSITORY}/materializationengine:v${MATERIALIZE_VERSION}
           args:
@@ -293,6 +219,7 @@ spec:
             [
               "/cloud_sql_proxy",
               "-instances=${PROJECT_NAME}:${REGION}:${SQL_INSTANCE_NAME}=tcp:3306",
+              "-instances=${PROJECT_NAME}:${REGION}:${SQL_INSTANCE_NAME}=tcp:5432",
               "-credential_file=/secrets/cloudsql/${GOOGLE_SECRET_FILENAME}",
             ]
           resources:
@@ -353,31 +280,31 @@ spec:
         - name: graceful-shut-down
           emptyDir: {}
       containers:
-        - name: celery-exporter
-          image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
-          command: ["python"]
-          args:
-            - cli.py
-            - --broker-url
-            - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
-            - --port
-            - "9540"
-            - -q
-            - ${CONSUMER_QUEUE_NAME}
-          ports:
-            - containerPort: 9540
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  [
-                    "sh",
-                    "-c",
-                    "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
-                  ]
-          volumeMounts:
-            - name: graceful-shut-down
-              mountPath: /home/nginx/tmp/shutdown
+        # - name: celery-exporter
+          # image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
+          # command: ["python"]
+          # args:
+          #   - cli.py
+          #   - --broker-url
+          #   - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
+          #   - --port
+          #   - "9540"
+          #   - -q
+          #   - ${CONSUMER_QUEUE_NAME}
+          # ports:
+          #   - containerPort: 9540
+          # lifecycle:
+          #   preStop:
+          #     exec:
+          #       command:
+          #         [
+          #           "sh",
+          #           "-c",
+          #           "while ! [ -f /home/nginx/tmp/shutdown/kill_sidecar ]; do sleep 1; done; kill -2 1",
+          #         ]
+          # volumeMounts:
+          #   - name: graceful-shut-down
+          #     mountPath: /home/nginx/tmp/shutdown
         - name: celery
           image: ${DOCKER_REPOSITORY}/materializationengine:v${MATERIALIZE_VERSION}
           args:
@@ -613,53 +540,3 @@ spec:
               memory: 150Mi
               cpu: 10m
       restartPolicy: Always
----
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: celery-exporter
-# spec:
-#   replicas: 1
-#   selector:
-#     matchLabels:
-#       app: celery-exporter
-#   template:
-#     metadata:
-#       labels:
-#         app: celery-exporter
-#     spec:
-#       containers:
-#         - name: celery-exporter
-#           image: ${DOCKER_REPOSITORY}/celery-metric-exporter:v5
-#           command: ["python"]
-#           args:
-#             - cli.py
-#             - --broker-url
-#             - redis://:${MAT_REDIS_PASSWORD}@${MAT_REDIS_HOST}:${MAT_REDIS_PORT}/0
-#             - --port
-#             - "9540"
-#             - -q
-#             - ${PRODUCER_QUEUE_NAME}
-#           ports:
-#             - containerPort: 9540
-#           resources:
-#             requests:
-#               cpu: 10m
-#               memory: 150Mi
-#           volumeMounts:
-#             - name: graceful-shut-down
-#               mountPath: /home/nginx/tmp/shutdown
-#       volumes:
-#         - name: graceful-shut-down
-#           emptyDir: {}
-# ---
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: celery-exporter
-# spec:
-#   ports:
-#     - port: 9540
-#       targetPort: 9540
-#   selector:
-#     app: celery-exporter

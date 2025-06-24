@@ -20,31 +20,53 @@ spec:
     - port: 80
       targetPort: 80
 ---
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: skeletoncache-scaler
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: skeletoncache
+#   minReplicas: ${SKELETONCACHE_MIN_REPLICAS}
+#   maxReplicas: ${SKELETONCACHE_MAX_REPLICAS}
+#   metrics:
+#     - type: Resource
+#       resource:
+#         name: cpu
+#         target:
+#           type: Utilization
+#           averageUtilization: 90
+#     - type: Pods
+#       pods:
+#         metric:
+#           name: custom.googleapis.com|http|uwsgi_perc_busy_workers
+#         target:
+#           type: AverageValue
+#           averageValue: 75
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: skeletoncache-scaler
+  name: keda-skeletoncache-scaler
+  namespace: default
+  # annotations:
+  #   scaledobject.keda.sh/transfer-hpa-ownership: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: skeletoncache
-  minReplicas: ${SKELETONCACHE_MIN_REPLICAS}
-  maxReplicas: ${SKELETONCACHE_MAX_REPLICAS}
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 90
-    - type: Pods
-      pods:
-        metric:
-          name: custom.googleapis.com|http|uwsgi_perc_busy_workers
-        target:
-          type: AverageValue
-          averageValue: 75
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: ${SKELETONCACHE_MIN_REPLICAS}
+  maxReplicaCount: ${SKELETONCACHE_MAX_REPLICAS}
+  triggers:
+    - type: cpu
+      metricType: Utilization # Allowed types are 'Utilization' or 'AverageValue'
+      metadata:
+        value: "75"
+        # containerName: "" # Optional. You can use this to target a specific container in a pod
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -137,43 +159,43 @@ spec:
             initialDelaySeconds: 15
             timeoutSeconds: 1
             periodSeconds: 60
-        - name: uwsgi-exporter
-          image: caveconnectome/uwsgi-export-workers:v14
-          # Exposes the metrics endpoint on 0.0.0.0:9101
-          ports:
-             - containerPort: 9101
-          env:
-          # This tells the exporter where to find the uWSGI stats server
-          - name: UWSGI_STATS_URL
-            value: "http://localhost:1717"
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 5
-        - name: prometheus-to-sd
-          image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
-          command: ["/monitor"]
-          args:
-            - --source=http://localhost:9101/metrics
-            - --stackdriver-prefix=custom.googleapis.com
-            - --pod-id=$(POD_ID)
-            - --namespace-id=$(POD_NAMESPACE)
-          env:
-            # save Kubernetes metadata as environment variables for use in metrics
-            - name: POD_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.uid
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+        # - name: uwsgi-exporter
+        #   image: caveconnectome/uwsgi-export-workers:v14
+        #   # Exposes the metrics endpoint on 0.0.0.0:9101
+        #   ports:
+        #      - containerPort: 9101
+        #   env:
+        #   # This tells the exporter where to find the uWSGI stats server
+        #   - name: UWSGI_STATS_URL
+        #     value: "http://localhost:1717"
+        #   readinessProbe:
+        #     httpGet:
+        #       path: /
+        #       port: 8080
+        #     initialDelaySeconds: 5
+        #     periodSeconds: 5
+        # - name: prometheus-to-sd
+        #   image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
+        #   command: ["/monitor"]
+        #   args:
+        #     - --source=http://localhost:9101/metrics
+        #     - --stackdriver-prefix=custom.googleapis.com
+        #     - --pod-id=$(POD_ID)
+        #     - --namespace-id=$(POD_NAMESPACE)
+        #   env:
+        #     # save Kubernetes metadata as environment variables for use in metrics
+        #     - name: POD_ID
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: metadata.uid
+        #     - name: POD_NAME
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: metadata.name
+        #     - name: POD_NAMESPACE
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: metadata.namespace
         - name: sysctl-buddy
           image: alpine:3.4
           command:
@@ -212,16 +234,16 @@ spec:
   - type: gcp-pubsub
     metadata:
       mode: "SubscriptionSize"
-      value: "1" # Optional - Default is 10
+      value: "10" # Optional - Default is 10
       activationValue: "0" # Optional - Default is 0
-      subscriptionName: ${SKELETON_CACHE_LOW_PRIORITY_EXCHANGE}
+      subscriptionName: ${SKELETON_CACHE_LOW_PRIORITY_RETRIEVE_QUEUE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
   - type: gcp-pubsub
     metadata:
       mode: "SubscriptionSize"
-      value: "1" # Optional - Default is 10
+      value: "5" # Optional - Default is 10
       activationValue: "0" # Optional - Default is 0
-      subscriptionName: ${SKELETON_CACHE_HIGH_PRIORITY_EXCHANGE}
+      subscriptionName: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
 apiVersion: apps/v1
@@ -313,4 +335,5 @@ spec:
             - /bin/sh
             - -c
             - python -u -m skeletonservice.datasets.messaging
+
             

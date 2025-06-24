@@ -8,8 +8,8 @@ source $ENV_REPO_PATH/$1.sh
 
 # helm upgrade --force --recreate-pods -f ${YAML_FOLDER}/redis_production_values.yml redis-release bitnami/redis  --version 10.7.11
 
-# helm repo add zettaai http://zetta.ai/helm-charts/charts # fixme replace with local repo if issue not fixed
+helm repo add zettaai http://zetta.ai/helm-charts/charts
 helm repo update
-helm install meshing.recycler local-helm/simple-cronjob -f ${YAML_FOLDER}/meshing_pod_recycler.yml
+helm install meshing.recycler zettaai/simple-cronjob -f ${YAML_FOLDER}/meshing_pod_recycler.yml
 
 # helm upgrade --force --recreate-pods -f ${YAML_FOLDER}/meshing_pod_recycler.yml meshing.recycler zettaai/simple-cronjob

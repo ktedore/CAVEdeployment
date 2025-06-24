@@ -9,24 +9,7 @@ ${PCG_CONFIG}
   L2_table_map.yml: |
 ${L2CACHE_CONFIG}
 ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: pcgl2cache-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: pcgl2cache
-#   minReplicas: ${PCGL2CACHE_MIN_REPLICAS}
-#   maxReplicas: ${PCGL2CACHE_MAX_REPLICAS}
-#   metrics:
-#     - type: Resource
-#       resource:
-#         name: cpu
-#         target:
-#           type: Utilization
-#           averageUtilization: 90
+
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -39,7 +22,7 @@ spec:
   maxReplicaCount: ${PCGL2CACHE_MAX_REPLICAS}
   triggers:
   - type: cpu
-    metricType: AverageValue # Allowed types are 'Utilization' or 'AverageValue'
+    metricType: Utilization # Allowed types are 'Utilization' or 'AverageValue'
     metadata:
       value: "90"
 ---
@@ -169,29 +152,6 @@ spec:
               memory: 10Mi
               cpu: 5m
 ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: pcgl2cache-worker-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: pcgl2cache-worker
-#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-#   metrics:
-#     - external:
-#         metric:
-#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
-#           selector:
-#             matchLabels:
-#               resource.labels.subscription_id: ${L2CACHE_UPDATE_QUEUE}
-#         target:
-#           type: AverageValue
-#           averageValue: 1
-#       type: External
----
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -219,29 +179,6 @@ spec:
       subscriptionName: ${L2CACHE_UPDATE_QUEUE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
 ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: pcgl2cache-lowpriorityworker-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: pcgl2cache-lowpriority-worker
-#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-#   metrics:
-#     - external:
-#         metric:
-#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
-#           selector:
-#             matchLabels:
-#               resource.labels.subscription_id: ${L2CACHE_TRIGGER_LOW_PRIORITY_QUEUE}
-#         target:
-#           type: AverageValue
-#           averageValue: 1
-#       type: External
----
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -254,7 +191,7 @@ spec:
     name: pcgl2cache-lowpriority-worker
   pollingInterval:  15
   cooldownPeriod:  300
-  idleReplicaCount: 1                                       
+  idleReplicaCount: 0                                       
   minReplicaCount: ${PCGL2CACHE_WORKER_MIN_REPLICAS}  
   maxReplicaCount: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
 
@@ -266,29 +203,6 @@ spec:
       activationValue: "1" # Optional - Default is 0
       subscriptionName: ${L2CACHE_TRIGGER_LOW_PRIORITY_QUEUE}
       credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
----
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: pcgl2cache-highpriorityworker-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: pcgl2cache-highpriority-worker
-#   minReplicas: ${PCGL2CACHE_WORKER_MIN_REPLICAS}
-#   maxReplicas: ${PCGL2CACHE_WORKER_MAX_REPLICAS}
-#   metrics:
-#     - external:
-#         metric:
-#           name: pubsub.googleapis.com|subscription|num_undelivered_messages
-#           selector:
-#             matchLabels:
-#               resource.labels.subscription_id: ${L2CACHE_TRIGGER_QUEUE}
-#         target:
-#           type: AverageValue
-#           averageValue: 1
-#       type: External
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -483,6 +397,9 @@ spec:
             requests:
               memory: 2500Mi
               cpu: 500m
+            limits:
+              memory: 3000Mi
+              cpu: 1000m
           command:
             - su
             - nginx

@@ -25,13 +25,13 @@ spec:
         target:
           type: Utilization
           averageUtilization: 110
-    - type: Pods
-      pods:
+    - type: External
+      external:
         metric:
           name: custom.googleapis.com|http|uwsgi_perc_busy_workers
         target:
           type: AverageValue
-          averageValue: 75
+          averageValue: "75"
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -51,13 +51,13 @@ spec:
         target:
           type: Utilization
           averageUtilization: 110
-    - type: Pods
-      pods:
+    - type: External
+      external:
         metric:
           name: custom.googleapis.com|http|uwsgi_perc_busy_workers
         target:
           type: AverageValue
-          averageValue: 75
+          averageValue: "75"
 ---
 kind: Service
 apiVersion: v1
@@ -270,10 +270,10 @@ spec:
       tolerations:
         - key: "pool"
           operator: "Equal"
-          value: "${STANDARD_POOL}"
+          value: "${MESH_POOL}"
           effect: "NoSchedule"
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${STANDARD_POOL}
+        cloud.google.com/gke-nodepool: ${MESH_POOL}
       volumes:
         - name: google-cloud-key
           secret:

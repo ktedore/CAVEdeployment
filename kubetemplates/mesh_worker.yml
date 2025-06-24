@@ -38,31 +38,28 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: keda-meshworker-scaler
+  labels:
+    scaledobject.keda.sh/name: keda-meshworker-scaler
   namespace: default
-  # annotations:
-  #   scaledobject.keda.sh/transfer-hpa-ownership: "true"
+  annotations:
+    scaledobject.keda.sh/transfer-hpa-ownership: "true"
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: meshworker
   pollingInterval:  15
-  cooldownPeriod:  300
-  idleReplicaCount: 0                                       
+  cooldownPeriod:  6000
+  # idleReplicaCount: 0                                   
   minReplicaCount: ${MESHWORKER_MIN_REPLICAS}  
   maxReplicaCount: ${MESHWORKER_MAX_REPLICAS}
-
   triggers:
-#   - type: external
-#     metadata:
-#       metricName: pubsub.googleapis.com|subscription|num_undelivered_messages
-#       targetValue: "1"
   - type: gcp-pubsub
     metadata:
       mode: "SubscriptionSize" # Optional - Default is SubscriptionSize - SubscriptionSize or OldestUnackedMessageAge
       # aggregation: "sum" # Optional - Only meaningful for distribution-valued metrics
-      value: "10" # Optional - Default is 10
-      activationValue: "1" # Optional - Default is 0
+      value: "2" # Optional - Default is 10
+      # activationValue: "1" # Optional - Default is 0
       # Exactly one of the subscription or topic name options is required
       subscriptionName: ${PYCHUNKEDGRAPH_REMESH_QUEUE}
       # topicName: "projects/lund-vision-group-cave/topics/local-2023c_PCG_EDIT" # todo: change to env var
