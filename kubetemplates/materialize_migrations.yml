@@ -52,7 +52,7 @@ spec:
                   exit_code=3
               fi
 
-              curl http://localhost:9091/quitquitquit # kill the cloudsql proxy sidecar
+              curl http://localhost:9091/quitquitquit || true # kill the cloudsql proxy sidecar
 
               exit $exit_code
           volumeMounts:
