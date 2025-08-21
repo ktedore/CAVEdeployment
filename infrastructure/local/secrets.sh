@@ -1,4 +1,9 @@
 source env_config.sh
+source ./infrastructure/local/defaults.sh
+source $ENV_REPO_PATH/$1.sh
+
+./infrastructure/local/switch_context.sh $1
+
 source $ENV_REPO_PATH/$1.sh
 
 gcloud container clusters get-credentials $CLUSTER_NAME --zone $ZONE

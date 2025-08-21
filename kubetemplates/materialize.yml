@@ -35,12 +35,12 @@ data:
     MIN_DATABASES = ${MIN_DATABASES}
     MAX_DATABASES = ${MAX_DATABASES}    
     # celery throttling settings
-    QUERY_LIMIT_SIZE = 500000
+    QUERY_LIMIT_SIZE = ${MAT_QUERY_LIMIT_SIZE}
     QUEUE_LENGTH_LIMIT = 5000
     QUEUES_TO_THROTTLE = ["process"]
     THROTTLE_QUEUES = True
     MERGE_TABLES=${MERGE_MATERIALIZE_DATABASES}  
-    LOGGING_LEVEL = logging.DEBUG
+    LOGGING_LEVEL = logging.${MAT_LOG_LEVEL}
     if os.environ.get("DAF_CREDENTIALS", None) is not None:
         with open(os.environ.get("DAF_CREDENTIALS"), "r") as f:
             AUTH_TOKEN = json.load(f)["token"]
