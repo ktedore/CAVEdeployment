@@ -20,53 +20,31 @@ spec:
     - port: 80
       targetPort: 80
 ---
-# apiVersion: autoscaling/v2
-# kind: HorizontalPodAutoscaler
-# metadata:
-#   name: skeletoncache-scaler
-# spec:
-#   scaleTargetRef:
-#     apiVersion: apps/v1
-#     kind: Deployment
-#     name: skeletoncache
-#   minReplicas: ${SKELETONCACHE_MIN_REPLICAS}
-#   maxReplicas: ${SKELETONCACHE_MAX_REPLICAS}
-#   metrics:
-#     - type: Resource
-#       resource:
-#         name: cpu
-#         target:
-#           type: Utilization
-#           averageUtilization: 90
-#     - type: Pods
-#       pods:
-#         metric:
-#           name: custom.googleapis.com|http|uwsgi_perc_busy_workers
-#         target:
-#           type: AverageValue
-#           averageValue: 75
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
 metadata:
-  name: keda-skeletoncache-scaler
-  namespace: default
-  # annotations:
-  #   scaledobject.keda.sh/transfer-hpa-ownership: "true"
+  name: skeletoncache-scaler
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: skeletoncache
-  pollingInterval: 15
-  cooldownPeriod: 300
-  minReplicaCount: ${SKELETONCACHE_MIN_REPLICAS}
-  maxReplicaCount: ${SKELETONCACHE_MAX_REPLICAS}
-  triggers:
-    - type: cpu
-      metricType: Utilization # Allowed types are 'Utilization' or 'AverageValue'
-      metadata:
-        value: "75"
-        # containerName: "" # Optional. You can use this to target a specific container in a pod
+  minReplicas: ${SKELETONCACHE_MIN_REPLICAS}
+  maxReplicas: ${SKELETONCACHE_MAX_REPLICAS}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 90
+    - type: Pods
+      pods:
+        metric:
+          name: custom.googleapis.com|http|uwsgi_perc_busy_workers
+        target:
+          type: AverageValue
+          averageValue: 75
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -98,7 +76,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: skeletoncache
-          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
+          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION} # europe-west3-docker.pkg.dev/lund-vision-group-cave/skeletonservice-repo/skeletonservice:v${SKELETONCACHE_VERSION} # ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -110,11 +88,6 @@ spec:
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /home/nginx/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
-            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
-              valueFrom:
-                secretKeyRef:
-                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
-                  key: ${GOOGLE_SECRET_FILENAME}
             - name: GLOBAL_SERVER_URL
               value: https://${GLOBAL_SERVER}
             - name: AUTH_URI
@@ -128,7 +101,7 @@ spec:
             - name: PROJECT_NAME
               value: ${PROJECT_NAME}
             - name: LIMITER_CATEGORIES
-              value: "${SK_LIMITER_CATEGORIES}"
+              value: '{"request":"100/minute"}' # ${SK_LIMITER_CATEGORIES}
             - name: LIMITER_URI
               value: ${LIMITER_URI}
             - name: SKELETONSERVICE_SETTINGS
@@ -171,43 +144,43 @@ spec:
             initialDelaySeconds: 15
             timeoutSeconds: 1
             periodSeconds: 60
-        # - name: uwsgi-exporter
-        #   image: caveconnectome/uwsgi-export-workers:v14
-        #   # Exposes the metrics endpoint on 0.0.0.0:9101
-        #   ports:
-        #      - containerPort: 9101
-        #   env:
-        #   # This tells the exporter where to find the uWSGI stats server
-        #   - name: UWSGI_STATS_URL
-        #     value: "http://localhost:1717"
-        #   readinessProbe:
-        #     httpGet:
-        #       path: /
-        #       port: 8080
-        #     initialDelaySeconds: 5
-        #     periodSeconds: 5
-        # - name: prometheus-to-sd
-        #   image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
-        #   command: ["/monitor"]
-        #   args:
-        #     - --source=http://localhost:9101/metrics
-        #     - --stackdriver-prefix=custom.googleapis.com
-        #     - --pod-id=$(POD_ID)
-        #     - --namespace-id=$(POD_NAMESPACE)
-        #   env:
-        #     # save Kubernetes metadata as environment variables for use in metrics
-        #     - name: POD_ID
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: metadata.uid
-        #     - name: POD_NAME
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: metadata.name
-        #     - name: POD_NAMESPACE
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: metadata.namespace
+        - name: uwsgi-exporter
+          image: caveconnectome/uwsgi-export-workers:v14
+          # Exposes the metrics endpoint on 0.0.0.0:9101
+          ports:
+            - containerPort: 9101
+          # This tells the exporter where to find the uWSGI stats server
+          env:
+            - name: UWSGI_STATS_URL
+              value: "http://localhost:1717"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+        - name: prometheus-to-sd
+          image: gcr.io/google-containers/prometheus-to-sd:v0.8.0
+          command: ["/monitor"]
+          args:
+            - --source=http://localhost:9101/metrics
+            - --stackdriver-prefix=custom.googleapis.com
+            - --pod-id=$(POD_ID)
+            - --namespace-id=$(POD_NAMESPACE)
+          env:
+            # save Kubernetes metadata as environment variables for use in metrics
+            - name: POD_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
         - name: sysctl-buddy
           image: alpine:3.4
           command:
@@ -227,36 +200,38 @@ spec:
               memory: 10Mi
               cpu: 5m
 ---
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
 metadata:
-  name: keda-skeletoncache-worker-scaler
-  namespace: default
+  name: skeletoncache-worker-scaler
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: skeletoncache-worker
-  pollingInterval:  15
-  cooldownPeriod:  300
-  idleReplicaCount: 1                                       
-  minReplicaCount: ${SKELETONCACHE_WORKER_MIN_REPLICAS} 
-  maxReplicaCount: ${SKELETONCACHE_WORKER_MAX_REPLICAS}
-  triggers:
-  - type: gcp-pubsub
-    metadata:
-      mode: "SubscriptionSize"
-      value: "10" # Optional - Default is 10
-      activationValue: "0" # Optional - Default is 0
-      subscriptionName: ${SKELETON_CACHE_LOW_PRIORITY_RETRIEVE_QUEUE}
-      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
-  - type: gcp-pubsub
-    metadata:
-      mode: "SubscriptionSize"
-      value: "5" # Optional - Default is 10
-      activationValue: "0" # Optional - Default is 0
-      subscriptionName: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
-      credentialsFromEnv: GOOGLE_APPLICATION_CREDENTIALS_FILE  # Required
+  minReplicas: ${SKELETONCACHE_WORKER_MIN_REPLICAS}
+  maxReplicas: ${SKELETONCACHE_WORKER_MAX_REPLICAS}
+  metrics:
+    - external:
+        metric:
+          name: pubsub.googleapis.com|subscription|num_undelivered_messages
+          selector:
+            matchLabels:
+              resource.labels.subscription_id: ${SKELETON_CACHE_LOW_PRIORITY_RETRIEVE_QUEUE}
+        target:
+          type: AverageValue
+          averageValue: 1
+      type: External
+    - external:
+        metric:
+          name: pubsub.googleapis.com|subscription|num_undelivered_messages
+          selector:
+            matchLabels:
+              resource.labels.subscription_id: ${SKELETON_CACHE_HIGH_PRIORITY_RETRIEVE_QUEUE}
+        target:
+          type: AverageValue
+          averageValue: 1
+      type: External
 ---
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
@@ -310,7 +285,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: skeletoncache-worker
-          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
+          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION} # europe-west3-docker.pkg.dev/lund-vision-group-cave/skeletonservice-repo/skeletonservice:v${SKELETONCACHE_VERSION} # ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -322,11 +297,6 @@ spec:
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /root/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
-            - name: GOOGLE_APPLICATION_CREDENTIALS_FILE
-              valueFrom:
-                secretKeyRef:
-                  name: ${PYCG_SERVICE_ACCOUNT_SECRET}
-                  key: ${GOOGLE_SECRET_FILENAME}
             - name: GLOBAL_SERVER_URL
               value: https://${GLOBAL_SERVER}
             - name: AUTH_URI
@@ -378,85 +348,85 @@ spec:
             - -c
             - python -u -m skeletonservice.datasets.messaging
 ---
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: skeletoncache-integration-tester
-spec:
-  backoffLimit: 1
-  template:
-    metadata:
-      labels:
-        app: skeletoncache-integration-tester
-    spec:
-      restartPolicy: OnFailure
-      tolerations:
-        - key: "pool"
-          operator: "Equal"
-          value: "${MESH_POOL}"
-          effect: "NoSchedule"
-      nodeSelector:
-        cloud.google.com/gke-nodepool: ${MESH_POOL}
-      volumes:
-        - name: google-cloud-key
-          secret:
-            secretName: ${SKELETON_SERVICE_ACCOUNT_SECRET}
-        - name: sksv-config-volume
-          configMap:
-            name: skeletoncache-config-v${SKELETONCACHE_CONFIG_VERSION}
-      terminationGracePeriodSeconds: 10
-      containers:
-        - name: skeletoncache-integration-tester
-          image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 80
-          volumeMounts:
-            - name: google-cloud-key
-              mountPath: /root/.cloudvolume/secrets
-            - name: sksv-config-volume
-              mountPath: /app/skeletoncache/app/instance/
-          env:
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /root/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
-            - name: GLOBAL_SERVER_URL
-              value: https://${GLOBAL_SERVER}
-            - name: AUTH_URI
-              value: ${AUTH_URI}
-            - name: STICKY_AUTH_URL
-              value: ${STICKY_AUTH_URL}
-            - name: BIGTABLE_PROJECT
-              value: ${DATA_PROJECT_NAME}
-            - name: BIGTABLE_INSTANCE
-              value: ${BIGTABLE_INSTANCE_NAME}
-            - name: AUTH_URL
-              value: ${AUTH_URL}
-            - name: INFO_URL
-              value: ${INFO_URL}
-            - name: APP_SETTINGS
-              value: "skeletoncache.app.config.DevelopmentConfig"
-            - name: SKELETON_CACHE_URL_PREFIX
-              value: sksv
-            - name: PROJECT_ID
-              value: ${DATA_PROJECT_NAME}
-            - name: PROJECT_NAME
-              value: ${PROJECT_NAME}
-            - name: DEV_SLACK_WEBHOOK_ID
-              value: "T0CL3AB5X/B08KJ36BJAF/DfcLRvJzizvCaozpMugAnu38"  # Keith Wiley's Slack direct messages
-            - name: PROD_SLACK_WEBHOOK_ID
-              value: "T0CL3AB5X/B08P52E7A05/iXHgqifbk8MtpDw4adoSh5pW"  # deployment-hour-alerts channel
-            - name: VERBOSE_LEVEL
-              value: "1"
-            - name: AUTH_USE_REDIS
-              value: "false"
-            - name: DAF_CREDENTIALS
-              value: /root/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
-          resources:
-            requests:
-              memory: 500Mi
-              cpu: 50m
-          command:
-            - /bin/sh
-            - -c
-            # You need to verify or change the value of the -d argument each time you deploy. Options are listed in the corresponding PrinceAllenCAVE config file.
-            - python -u -m tests.test_integration --kube -s ${SKELETON_INTEGRATION_TEST_SERVER} -d ${SKELETON_INTEGRATION_TEST_DATASTACK__DEFAULT} -z ${ZONE} -c ${CLUSTER_NAME} -v 2
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: skeletoncache-integration-tester
+# spec:
+#   backoffLimit: 1
+#   template:
+#     metadata:
+#       labels:
+#         app: skeletoncache-integration-tester
+#     spec:
+#       restartPolicy: OnFailure
+#       tolerations:
+#         - key: "pool"
+#           operator: "Equal"
+#           value: "${MESH_POOL}"
+#           effect: "NoSchedule"
+#       nodeSelector:
+#         cloud.google.com/gke-nodepool: ${MESH_POOL}
+#       volumes:
+#         - name: google-cloud-key
+#           secret:
+#             secretName: ${SKELETON_SERVICE_ACCOUNT_SECRET}
+#         - name: sksv-config-volume
+#           configMap:
+#             name: skeletoncache-config-v${SKELETONCACHE_CONFIG_VERSION}
+#       terminationGracePeriodSeconds: 10
+#       containers:
+#         - name: skeletoncache-integration-tester
+#           image: ${DOCKER_REPOSITORY}/skeletoncache:v${SKELETONCACHE_VERSION}
+#           imagePullPolicy: Always
+#           ports:
+#             - containerPort: 80
+#           volumeMounts:
+#             - name: google-cloud-key
+#               mountPath: /root/.cloudvolume/secrets
+#             - name: sksv-config-volume
+#               mountPath: /app/skeletoncache/app/instance/
+#           env:
+#             - name: GOOGLE_APPLICATION_CREDENTIALS
+#               value: /root/.cloudvolume/secrets/${GOOGLE_SECRET_FILENAME}
+#             - name: GLOBAL_SERVER_URL
+#               value: https://${GLOBAL_SERVER}
+#             - name: AUTH_URI
+#               value: ${AUTH_URI}
+#             - name: STICKY_AUTH_URL
+#               value: ${STICKY_AUTH_URL}
+#             - name: BIGTABLE_PROJECT
+#               value: ${DATA_PROJECT_NAME}
+#             - name: BIGTABLE_INSTANCE
+#               value: ${BIGTABLE_INSTANCE_NAME}
+#             - name: AUTH_URL
+#               value: ${AUTH_URL}
+#             - name: INFO_URL
+#               value: ${INFO_URL}
+#             - name: APP_SETTINGS
+#               value: "skeletoncache.app.config.DevelopmentConfig"
+#             - name: SKELETON_CACHE_URL_PREFIX
+#               value: sksv
+#             - name: PROJECT_ID
+#               value: ${DATA_PROJECT_NAME}
+#             - name: PROJECT_NAME
+#               value: ${PROJECT_NAME}
+#             - name: DEV_SLACK_WEBHOOK_ID
+#               value: "T0CL3AB5X/B08KJ36BJAF/DfcLRvJzizvCaozpMugAnu38"  # Keith Wiley's Slack direct messages
+#             - name: PROD_SLACK_WEBHOOK_ID
+#               value: "T0CL3AB5X/B08P52E7A05/iXHgqifbk8MtpDw4adoSh5pW"  # deployment-hour-alerts channel
+#             - name: VERBOSE_LEVEL
+#               value: "1"
+#             - name: AUTH_USE_REDIS
+#               value: "false"
+#             - name: DAF_CREDENTIALS
+#               value: /root/.cloudvolume/secrets/${CAVE_SECRET_FILENAME}
+#           resources:
+#             requests:
+#               memory: 500Mi
+#               cpu: 50m
+#           command:
+#             - /bin/sh
+#             - -c
+#             # You need to verify or change the value of the -d argument each time you deploy. Options are listed in the corresponding PrinceAllenCAVE config file.
+#             - python -u -m tests.test_integration --kube -s ${SKELETON_INTEGRATION_TEST_SERVER} -d ${SKELETON_INTEGRATION_TEST_DATASTACK__DEFAULT} -z ${ZONE} -c ${CLUSTER_NAME} -v 2
