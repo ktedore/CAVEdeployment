@@ -19,7 +19,7 @@
 	"postCreateCommand": "curl -sSL https://sdk.cloud.google.com | bash && echo 'Y' | gcloud components install gke-gcloud-auth-plugin",
 
 	"mounts": [
-    "source=/Users/ktedore/Documents/Development/CAVEdeployment/environments,target=/environments-custom,type=bind"
+    "source=/home/ktedore/Documents/Development/CAVEdeployment_variables,target=/environments-custom,type=bind"
   ]
 
 	// Configure tool-specific properties.
